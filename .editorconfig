@@ -1,0 +1,30 @@
+# editorconfig.org
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+trim_trailing_whitespace = true
+indent_size = 4
+tab_width = 4
+
+# To find the relevant formatter names:
+# https://www.jetbrains.com/help/resharper/EditorConfig_CSHARP_BlankLinesPageScheme.html
+[*.cs]
+indent_style = tab
+csharp_style_var_for_built_in_types = false
+csharp_default_private_modifier = implicit
+csharp_wrap_long_lines = false
+csharp_space_after_cast = false
+csharp_new_line_before_open_brace = all
+csharp_empty_brace_formatting = keep
+csharp_blank_lines_after_block_statements = 0
+csharp_max_attribute_length_for_same_line = 100
+csharp_indent_preprocessor_if = usual_indent
+
+[*.json]
+indent_style = tab
+
+[*.md]
+indent_style = tab
