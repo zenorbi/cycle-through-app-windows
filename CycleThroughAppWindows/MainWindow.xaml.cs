@@ -1,20 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
 using System.Windows.Interop;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 
 namespace CycleThroughAppWindows
 {
@@ -23,83 +11,75 @@ namespace CycleThroughAppWindows
 	/// </summary>
 	public partial class MainWindow : Window
 	{
+		const int WH_KEYBOARD_LL = 13;
+		const int WM_KEYDOWN = 0x0100;
+		const int WM_SYSKEYDOWN = 0x0104;
+		const int VK_LMENU = 0xA4;
+		const int VK_RMENU = 0xA5;
+
+		static LowLevelKeyboardProc _proc = HookCallback;
+		static IntPtr _hookID = IntPtr.Zero;
+
 		public MainWindow()
 		{
 			InitializeComponent();
 		}
 
-		[DllImport("User32.dll")]
-		static extern bool RegisterHotKey(
-			[In] IntPtr hWnd,
-			[In] int id,
-			[In] uint fsModifiers,
-			[In] uint vk);
-
-		[DllImport("User32.dll")]
-		static extern bool UnregisterHotKey(
-			[In] IntPtr hWnd,
-			[In] int id);
-
-		HwndSource _source;
-		const int HOTKEY_ID = 9000;
-
 		protected override void OnSourceInitialized(EventArgs e)
 		{
 			base.OnSourceInitialized(e);
-			var helper = new WindowInteropHelper(this);
-			_source = HwndSource.FromHwnd(helper.Handle);
-			_source.AddHook(HwndHook);
-			RegisterHotKey();
+			_hookID = SetHook(_proc);
 		}
 
 		protected override void OnClosed(EventArgs e)
 		{
-			_source.RemoveHook(HwndHook);
-			_source = null;
-			UnregisterHotKey();
+			UnhookWindowsHookEx(_hookID);
 			base.OnClosed(e);
 		}
 
-		void RegisterHotKey()
+		static IntPtr SetHook(LowLevelKeyboardProc proc)
 		{
-			var helper = new WindowInteropHelper(this);
-			const uint VK_F10 = 0x79;
-			const uint MOD_CTRL = 0x0002;
-			if (!RegisterHotKey(helper.Handle, HOTKEY_ID, MOD_CTRL, VK_F10))
+			using (Process curProcess = Process.GetCurrentProcess())
+			using (ProcessModule curModule = curProcess.MainModule)
 			{
-				// handle error
+				return SetWindowsHookEx(WH_KEYBOARD_LL, proc, GetModuleHandle(curModule.ModuleName), 0);
 			}
 		}
 
-		void UnregisterHotKey()
-		{
-			var helper = new WindowInteropHelper(this);
-			UnregisterHotKey(helper.Handle, HOTKEY_ID);
-		}
+		delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
 
-		IntPtr HwndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+		static IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
 		{
-			const int WM_HOTKEY = 0x0312;
-			switch (msg)
+			if (nCode >= 0 && (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN))
 			{
-				case WM_HOTKEY:
-					switch (wParam.ToInt32())
-					{
-						case HOTKEY_ID:
-							OnHotKeyPressed();
-							handled = true;
-							break;
-					}
+				int vkCode = Marshal.ReadInt32(lParam);
 
-					break;
+				bool isAltPressed = GetAsyncKeyState(VK_LMENU) < 0 || GetAsyncKeyState(VK_RMENU) < 0;
+				bool isTildePressed = vkCode == 0xC0;
+
+				if (isAltPressed && isTildePressed)
+				{
+					Console.WriteLine("Alt + Tilde pressed");
+					Logic.SwitchToNextWindow();
+				}
 			}
-
-			return IntPtr.Zero;
+			return CallNextHookEx(_hookID, nCode, wParam, lParam);
 		}
 
-		void OnHotKeyPressed()
-		{
-			Logic.SwitchToNextWindow();
-		}
+		[DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+		static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
+
+		[DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+		[return: MarshalAs(UnmanagedType.Bool)]
+		static extern bool UnhookWindowsHookEx(IntPtr hhk);
+
+		[DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+		static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+
+		[DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+		static extern IntPtr GetModuleHandle(string lpModuleName);
+
+		[DllImport("user32.dll")]
+		static extern short GetAsyncKeyState(int vKey);
 	}
 }
